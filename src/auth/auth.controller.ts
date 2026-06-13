@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Res, UseGuards, Get, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  UseGuards,
+  Get,
+  Req,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
@@ -8,9 +16,12 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('admin/login')
-  async adminLogin(@Body() body: any, @Res({ passthrough: true }) res: Response) {
+  async adminLogin(
+    @Body() body: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const token = await this.authService.adminLogin(body);
-    
+
     // Push token to HttpOnly Cookie
     res.cookie('admin_session', token, {
       httpOnly: true,

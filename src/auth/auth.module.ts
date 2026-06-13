@@ -7,10 +7,12 @@ import { PassportModule } from '@nestjs/passport';
 import { AdminJwtStrategy } from './admin-jwt.strategy';
 import { StudentJwtStrategy } from './student-jwt.strategy';
 import { JWT_SECRET } from './jwt.constants';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'admin-jwt' }),
+    DatabaseModule,
     JwtModule.register({
       secret: JWT_SECRET,
       signOptions: { expiresIn: '1d' },

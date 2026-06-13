@@ -13,10 +13,13 @@ import * as nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 const getRequiredEnv = (name: string, fallbackName?: string): string => {
-  const value = process.env[name] || (fallbackName ? process.env[fallbackName] : undefined);
+  const value =
+    process.env[name] || (fallbackName ? process.env[fallbackName] : undefined);
 
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}${fallbackName ? ` or ${fallbackName}` : ''}`);
+    throw new Error(
+      `Missing required environment variable: ${name}${fallbackName ? ` or ${fallbackName}` : ''}`,
+    );
   }
 
   return value;
@@ -39,9 +42,14 @@ export class AuthService {
     private jwtService: JwtService,
   ) {
     const smtpHost = getRequiredEnv('SMTP_HOST', 'EMAIL_HOST');
-    const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
+    const smtpPort = Number(
+      process.env.SMTP_PORT || process.env.EMAIL_PORT || 587,
+    );
     this.smtpUser = getRequiredEnv('SMTP_USER', 'EMAIL_USER');
-    const smtpPass = getRequiredEnv('SMTP_PASS', 'EMAIL_PASS').replace(/\s/g, '');
+    const smtpPass = getRequiredEnv('SMTP_PASS', 'EMAIL_PASS').replace(
+      /\s/g,
+      '',
+    );
 
     this.transporter = nodemailer.createTransport({
       host: smtpHost,
@@ -58,14 +66,21 @@ export class AuthService {
   // --- ADMIN AUTH ---
   async adminLogin(body: any) {
     const { email, password } = body;
-    const admin = await this.dbService.db.collection('admins').findOne({ email });
-    
+    const normalizedEmail = email.trim().toLowerCase();
+    const admin = await this.dbService.db
+      .collection('admins')
+      .findOne({ email: normalizedEmail });
+
     if (!admin) throw new UnauthorizedException('Invalid credentials');
 
     const isMatch = await bcrypt.compare(password, admin.password_hash);
     if (!isMatch) throw new UnauthorizedException('Invalid credentials');
 
-    const payload = { sub: admin._id, email: admin.email, role: 'admin' };
+    const payload = {
+      sub: admin._id.toString(),
+      email: admin.email,
+      role: 'admin',
+    };
     return this.jwtService.sign(payload, { expiresIn: '1d' });
   }
 
@@ -75,7 +90,9 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
 
     // 1. Check if the user is a buyer (if their email exists in the orders collection)
-    const buyerExists = await this.dbService.db.collection('orders').findOne({ email: normalizedEmail, payment_status: 'Paid' });
+    const buyerExists = await this.dbService.db
+      .collection('orders')
+      .findOne({ email: normalizedEmail, payment_status: 'Paid' });
     if (!buyerExists) {
       throw new BadRequestException('This email has no purchase history.');
     }
@@ -85,11 +102,13 @@ export class AuthService {
     const expireAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute validity
 
     // 3. Save/Update OTP
-    await this.dbService.db.collection('otp_verifications').updateOne(
-      { email: normalizedEmail },
-      { $set: { otp_code: otpCode, expireAt } },
-      { upsert: true }
-    );
+    await this.dbService.db
+      .collection('otp_verifications')
+      .updateOne(
+        { email: normalizedEmail },
+        { $set: { otp_code: otpCode, expireAt } },
+        { upsert: true },
+      );
 
     // 4. Send Email
     try {
@@ -105,7 +124,9 @@ export class AuthService {
       this.logger.error(
         `Failed to send OTP email: ${smtpError.code || 'SMTP_ERROR'} ${smtpError.response || smtpError.message}`,
       );
-      throw new ServiceUnavailableException('Failed to send email. Check SMTP setup.');
+      throw new ServiceUnavailableException(
+        'Failed to send email. Check SMTP setup.',
+      );
     }
   }
 
@@ -121,13 +142,15 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
     const otpCode = String(otp).trim();
     const normalizedDeviceId = String(device_id).trim();
-    
+
     // 1. Direct matching and expiry check in MongoDB
-    const record = await this.dbService.db.collection('otp_verifications').findOne({
-      email: normalizedEmail,
-      otp_code: otpCode,
-      expireAt: { $gt: new Date() } // Expiry time must be greater than current time
-    });
+    const record = await this.dbService.db
+      .collection('otp_verifications')
+      .findOne({
+        email: normalizedEmail,
+        otp_code: otpCode,
+        expireAt: { $gt: new Date() }, // Expiry time must be greater than current time
+      });
 
     if (!record) {
       throw new BadRequestException('Invalid or expired OTP.');
@@ -135,30 +158,42 @@ export class AuthService {
 
     // 2. Device session tracking and 2-device limit restriction
     const sessionsCollection = this.dbService.db.collection('device_sessions');
-    const existingSessions = await sessionsCollection.find({ email: normalizedEmail }).toArray();
+    const existingSessions = await sessionsCollection
+      .find({ email: normalizedEmail })
+      .toArray();
 
     // Check if the current request's device_id is already locked in the database
-    const isCurrentDeviceRegistered = existingSessions.some(session => session.device_id === normalizedDeviceId);
+    const isCurrentDeviceRegistered = existingSessions.some(
+      (session) => session.device_id === normalizedDeviceId,
+    );
 
     if (!isCurrentDeviceRegistered) {
       // If two different devices are already locked in the database, block access for the third device (403)
       if (existingSessions.length >= 2) {
-        throw new ForbiddenException('Access Denied. You have reached the maximum limit of 2 devices for this email.');
+        throw new ForbiddenException(
+          'Access Denied. You have reached the maximum limit of 2 devices for this email.',
+        );
       }
 
       // If there are fewer than 2 devices, save the new device ID permanently in the collection
       await sessionsCollection.insertOne({
         email: normalizedEmail,
         device_id: normalizedDeviceId,
-        registered_at: new Date()
+        registered_at: new Date(),
       });
     }
 
     // Remove OTP from collection once matched and verified (One-time Use)
-    await this.dbService.db.collection('otp_verifications').deleteOne({ email: normalizedEmail });
+    await this.dbService.db
+      .collection('otp_verifications')
+      .deleteOne({ email: normalizedEmail });
 
     // Issue 1-year valid JWT for students
-    const payload = { email: normalizedEmail, deviceId: normalizedDeviceId, role: 'student' };
+    const payload = {
+      email: normalizedEmail,
+      deviceId: normalizedDeviceId,
+      role: 'student',
+    };
     const token = this.jwtService.sign(payload, { expiresIn: '365d' });
 
     return { success: true, access_token: token };
@@ -166,10 +201,16 @@ export class AuthService {
 
   // 🔄 Logic to reset/clear a student's devices from the admin panel
   async resetStudentDevices(email: string) {
-    if (!email) throw new BadRequestException('Email is required to reset devices.');
+    if (!email)
+      throw new BadRequestException('Email is required to reset devices.');
     const normalizedEmail = email.trim().toLowerCase();
-    
-    await this.dbService.db.collection('device_sessions').deleteMany({ email: normalizedEmail });
-    return { success: true, message: `All device sessions cleared successfully for ${normalizedEmail}.` };
+
+    await this.dbService.db
+      .collection('device_sessions')
+      .deleteMany({ email: normalizedEmail });
+    return {
+      success: true,
+      message: `All device sessions cleared successfully for ${normalizedEmail}.`,
+    };
   }
 }

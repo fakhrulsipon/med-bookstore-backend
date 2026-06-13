@@ -1,4 +1,12 @@
-import { Controller, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AuthGuard } from '@nestjs/passport';
 
@@ -32,7 +40,8 @@ export class AdminDashboardController {
   @Patch('orders/:id/status')
   async updateOrderStatus(
     @Param('id') orderId: string,
-    @Body('status') status: 'PENDING' | 'Paid' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'
+    @Body('status')
+    status: 'PENDING' | 'Paid' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED',
   ) {
     return this.dashboardService.updateOrderStatus(orderId, status);
   }
